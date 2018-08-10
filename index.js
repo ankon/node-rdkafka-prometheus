@@ -44,7 +44,7 @@ class RdkafkaStats { // eslint-disable-line lines-before-comment
 			registers: [prometheus.register],
 		}, options);
 
-		const globalLabelNames = ['handle', 'type', ...Object.keys(extraLabels)];
+		const globalLabelNames = ['handle', 'client', 'type', ...Object.keys(extraLabels)];
 		const brokerLabelNames = [...globalLabelNames, 'name', 'nodeid'];
 		const topparsLabelNames = [...brokerLabelNames, 'topic'];
 		const topicLabelNames = [...globalLabelNames, 'topic'];
@@ -60,6 +60,30 @@ class RdkafkaStats { // eslint-disable-line lines-before-comment
 		const makeRdKafkaCounter = counterOptions => new prometheus.Gauge(Object.assign(counterOptions, {registers}));
 		const makeRdkafkaGauge = gaugeOptions => new prometheus.Gauge(Object.assign(gaugeOptions, {registers}));
 
+		const makeRdkafkaWindowStats = statsOptions => {
+			const keysAndLabels = {
+				min: 'Smallest value',
+				max: 'Largest value', // eslint-disable-line sort-keys
+				avg: 'Average value', // eslint-disable-line sort-keys
+				sum: 'Sum of values',
+				cnt: 'Number of values sampled', // eslint-disable-line sort-keys
+				stddev: 'Standard deviation (based on histogram)',
+				hdrsize: 'Memory size of Hdr Histogram', // eslint-disable-line sort-keys
+				outofrange: 'Values skipped due to out of histogram range',
+			};
+			const {help, name, labelNames, ...otherStatsOptions} = statsOptions;
+			const subMetrics = Object.keys(keysAndLabels).map(key => makeRdkafkaGauge(Object.assign({
+				help: `${help} (${keysAndLabels[key]})`,
+				labelNames,
+				name: `${name}_${key}`,
+			}, otherStatsOptions)));
+
+			return [makeRdkafkaGauge(Object.assign({
+				help,
+				labelNames: [...labelNames, 'percentile'],
+				name,
+			}, otherStatsOptions)), ...subMetrics];
+		};
 		// Disable eslint from complaining about the order: this is based on what rdkafka has in the documentation, so make finding specific statistics faster.
 		/* eslint-disable sort-keys */
 		this.metrics = {
@@ -206,82 +230,6 @@ class RdkafkaStats { // eslint-disable-line lines-before-comment
 				name: `${namePrefix}rdkafka_broker_wakeups`,
 				labelNames: brokerLabelNames,
 			}),
-			// Window stats: each of (int_latency,rtt,throttle) x (min, max, avg, sum, cnt)
-			BROKER_INT_LATENCY_MIN: makeRdkafkaGauge({
-				help: 'Internal producer queue latency in microseconds (smallest value)',
-				name: `${namePrefix}rdkafka_broker_int_latency_min`,
-				labelNames: brokerLabelNames,
-			}),
-			BROKER_INT_LATENCY_MAX: makeRdkafkaGauge({
-				help: 'Internal producer queue latency in microseconds (largest value)',
-				name: `${namePrefix}rdkafka_broker_int_latency_max`,
-				labelNames: brokerLabelNames,
-			}),
-			BROKER_INT_LATENCY_AVG: makeRdkafkaGauge({
-				help: 'Internal producer queue latency in microseconds (average value)',
-				name: `${namePrefix}rdkafka_broker_int_latency_avg`,
-				labelNames: brokerLabelNames,
-			}),
-			BROKER_INT_LATENCY_SUM: makeRdkafkaGauge({
-				help: 'Internal producer queue latency in microseconds (sum of values)',
-				name: `${namePrefix}rdkafka_broker_int_latency_sum`,
-				labelNames: brokerLabelNames,
-			}),
-			BROKER_INT_LATENCY_CNT: makeRdkafkaGauge({
-				help: 'Internal producer queue latency in microseconds (number of value samples)',
-				name: `${namePrefix}rdkafka_broker_int_latency_cnt`,
-				labelNames: brokerLabelNames,
-			}),
-			BROKER_RTT_MIN: makeRdkafkaGauge({
-				help: 'Broker latency / round-trip time in microseconds (smallest value)',
-				name: `${namePrefix}rdkafka_broker_rtt_min`,
-				labelNames: brokerLabelNames,
-			}),
-			BROKER_RTT_MAX: makeRdkafkaGauge({
-				help: 'Broker latency / round-trip time in microseconds (largest value)',
-				name: `${namePrefix}rdkafka_broker_rtt_max`,
-				labelNames: brokerLabelNames,
-			}),
-			BROKER_RTT_AVG: makeRdkafkaGauge({
-				help: 'Broker latency / round-trip time in microseconds (average value)',
-				name: `${namePrefix}rdkafka_broker_rtt_avg`,
-				labelNames: brokerLabelNames,
-			}),
-			BROKER_RTT_SUM: makeRdkafkaGauge({
-				help: 'Broker latency / round-trip time in microseconds (sum of values)',
-				name: `${namePrefix}rdkafka_broker_rtt_sum`,
-				labelNames: brokerLabelNames,
-			}),
-			BROKER_RTT_CNT: makeRdkafkaGauge({
-				help: 'Broker latency / round-trip time in microseconds (number of value samples)',
-				name: `${namePrefix}rdkafka_broker_rtt_cnt`,
-				labelNames: brokerLabelNames,
-			}),
-			BROKER_THROTTLE_MIN: makeRdkafkaGauge({
-				help: 'Broker throttling time in milliseconds (smallest value)',
-				name: `${namePrefix}rdkafka_broker_throttle_min`,
-				labelNames: brokerLabelNames,
-			}),
-			BROKER_THROTTLE_MAX: makeRdkafkaGauge({
-				help: 'Broker throttling time in milliseconds (largest value)',
-				name: `${namePrefix}rdkafka_broker_throttle_max`,
-				labelNames: brokerLabelNames,
-			}),
-			BROKER_THROTTLE_AVG: makeRdkafkaGauge({
-				help: 'Broker throttling time in milliseconds (average value)',
-				name: `${namePrefix}rdkafka_broker_throttle_avg`,
-				labelNames: brokerLabelNames,
-			}),
-			BROKER_THROTTLE_SUM: makeRdkafkaGauge({
-				help: 'Broker throttling time in milliseconds (sum of values)',
-				name: `${namePrefix}rdkafka_broker_throttle_sum`,
-				labelNames: brokerLabelNames,
-			}),
-			BROKER_THROTTLE_CNT: makeRdkafkaGauge({
-				help: 'Broker throttling time in milliseconds (number of value samples)',
-				name: `${namePrefix}rdkafka_broker_throttle_cnt`,
-				labelNames: brokerLabelNames,
-			}),
 			BROKER_TOPPARS_PARTITION: makeRdKafkaCounter({
 				help: 'Partitions handled by this broker handle',
 				name: `${namePrefix}rdkafka_broker_toppars_partition`,
@@ -426,6 +374,15 @@ class RdkafkaStats { // eslint-disable-line lines-before-comment
 				labelNames: cgrpLabelNames,
 			}),
 		};
+
+		// TODO: Create and inject the window stats
+		const brokerWindowStats = {
+			'broker_int_latency': 'Internal producer queue latency in microseconds',
+			'broker_outbuf_latency': 'Internal request queue latency in microseconds',
+			'broker_rtt': 'Broker latency / round-trip time in microseconds',
+			'broker_throttle': 'Broker throttling time in milliseconds',
+		};
+
 		/* eslint-enable sort-keys */
 		this.extraLabels = extraLabels;
 
@@ -576,12 +533,14 @@ class RdkafkaStats { // eslint-disable-line lines-before-comment
 
 	_translateRdkafkaStats(stats) {
 		const globalLabels = Object.assign({}, this.extraLabels, {
+			client: stats.client_id,
 			handle: stats.name,
 			type: stats.type
 		});
 		for (const key of Object.keys(stats)) {
 			switch (key) {
 			case 'name':
+			case 'client_id':
 			case 'type':
 				// Ignore: these are global labels
 				break;
